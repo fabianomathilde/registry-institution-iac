@@ -1,0 +1,10 @@
+# Messages: Pub/Sub topics. Access is granted in service_accounts.yaml with "topic/<name>".
+# Topics with bigquery: true are streamed into a table of the dataset below (no consumer code).
+
+bigquery:
+  dataset: events                      # one dataset for all streamed topics
+  location: US
+
+topics:
+  optin-backend-events:
+    bigquery: true                     # → table events.optin_backend_events

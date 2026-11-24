@@ -1,0 +1,114 @@
+# IaC CD (gitflow): applies merged changes.
+#
+#   push to develop -> plan + apply dev
+#   push to main    -> plan prod (shown in the summary) -> approval on "prod" -> apply prod
+#   manual run      -> same, for the environment you pick (e.g. re-apply after a manual change)
+#
+# Environments: dev (no reviewers), prod-plan (no reviewers, prod variables), prod (Required
+# reviewers, Deployment branches = main). Each holds the variables printed by
+#   scripts/tf.sh <env> identities output github_variables_iac_repo
+# The apply job plans again right before applying; review the plan job's summary before approving,
+# and check the apply log matches it.
+
+name: cd
+
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_VERSION: "1.17.2"
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  target:
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.t.outputs.env }}
+      plan_env: ${{ steps.t.outputs.plan_env }}
+    steps:
+      - id: t
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ inputs.environment }}"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            ENV=prod
+          else
+            ENV=dev
+          fi
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          if [[ "$ENV" == "prod" ]]; then echo "plan_env=prod-plan"; else echo "plan_env=$ENV"; fi >> "$GITHUB_OUTPUT"
+
+  plan:
+    needs: target
+    runs-on: ubuntu-latest
+    environment: ${{ needs.target.outputs.plan_env }}
+    env:
+      TARGET_ENV: ${{ needs.target.outputs.env }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.TERRAFORM_SA }}
+      - name: plan (for review)
+        run: |
+          for stack in foundation components identities platform; do
+            ./scripts/tf.sh "$TARGET_ENV" "$stack" plan -no-color -lock=false
+            {
+              echo "### ${TARGET_ENV} / ${stack}"
+              echo '```'
+              (cd "stacks/${stack}" && terraform show -no-color tfplan | tail -c 30000)
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  apply:
+    needs: [target, plan]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.target.outputs.env }}
+    concurrency: terraform-${{ needs.target.outputs.env }}
+    env:
+      TARGET_ENV: ${{ needs.target.outputs.env }}
+      TF_AUTO_APPROVE: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.TERRAFORM_SA }}
+      # Order matters: each stack reads the outputs (remote state) of the ones before it.
+      - name: foundation
+        run: |
+          ./scripts/tf.sh "$TARGET_ENV" foundation plan -no-color
+          ./scripts/tf.sh "$TARGET_ENV" foundation apply
+      - name: components
+        run: |
+          ./scripts/tf.sh "$TARGET_ENV" components plan -no-color
+          ./scripts/tf.sh "$TARGET_ENV" components apply
+      - name: identities
+        run: |
+          ./scripts/tf.sh "$TARGET_ENV" identities plan -no-color
+          ./scripts/tf.sh "$TARGET_ENV" identities apply
+      - name: platform
+        run: |
+          ./scripts/tf.sh "$TARGET_ENV" platform plan -no-color
+          ./scripts/tf.sh "$TARGET_ENV" platform apply

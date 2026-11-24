@@ -1,0 +1,18 @@
+# Kubernetes: the GKE cluster and the namespaces apps run in.
+# Each namespace gets a ResourceQuota. Who may deploy into it is set in service_accounts.yaml
+# (access "namespace/<name>: deployer").
+
+cluster:
+  enabled: true                        # false = remove the cluster to save credit (destroy platform first)
+  release_channel: REGULAR
+
+namespaces:
+  optin-backend:
+    quota:
+      cpu: "4"                         # sum of all pods' CPU requests
+      memory: 8Gi                      # sum of all pods' memory requests/limits
+
+  # external-dns:                      # needed only with a DNS domain (network.yaml)
+  #   quota:
+  #     cpu: "1"
+  #     memory: 1Gi

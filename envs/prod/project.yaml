@@ -1,0 +1,13 @@
+# Project: who and where. Do not apply prod until dev works end to end (README "Prod").
+# The state bucket is derived as "<project_id>-tfstate".
+
+project_id: registry-institution-prd   # verify the project ID: gcloud projects list
+environment: prod
+region: us-central1
+
+github:
+  owner: fabianomathilde               # GitHub user or organization that owns all repos
+  iac_repo: registry-institution-iac   # this repo
+
+# true in prod: clusters, databases and data can't be destroyed by terraform destroy.
+deletion_protection: true

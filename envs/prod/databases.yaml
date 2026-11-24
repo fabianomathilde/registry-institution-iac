@@ -1,0 +1,34 @@
+# Databases: every database instance, by type and name.
+# Access is granted in service_accounts.yaml with "firestore/<name>" or "cloudsql/<name>".
+
+firestore:
+  default:                             # "(default)" database: the only one in the free tier
+    location: us-central1              # cannot be changed after creation
+    indexes:                           # composite indexes (fields ascending, in this order)
+      - collection: optIns
+        fields:
+          - status
+          - validUntil
+      - collection: optIns
+        fields:
+          - grantee
+          - status
+      - collection: optIns
+        fields:
+          - merchant
+          - status
+
+  # payments:                          # future, paid: a separate database with its own IAM
+  #   location: us-central1
+
+cloudsql:                              # none for now (~$10/month for the smallest instance)
+  # shared-pg:
+  #   tier: db-f1-micro
+  #   availability_type: ZONAL         # REGIONAL = HA (about double the cost)
+  #   activation_policy: ALWAYS        # initial state; then start/stop with scripts/env.sh
+  #   point_in_time_recovery: false
+  #   databases:                       # each gets a user with the same name and the generated
+  #     - optin_backend                # password in secret "cloudsql-shared-pg-optin_backend-password"
+
+spanner:
+  trial: false                         # 90-day free instance; the clock starts at creation

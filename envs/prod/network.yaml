@@ -1,0 +1,19 @@
+# Network: VPC ranges, outbound internet, public ingress and DNS.
+
+vpc:
+  subnet_cidr: 10.110.0.0/20           # GKE nodes
+  pods_cidr: 10.120.0.0/16             # GKE pods (Autopilot recommends /17 or larger)
+  services_cidr: 10.130.0.0/20         # Kubernetes services
+
+nat:
+  enabled: false                       # true only when something must pull public images (e.g. ExternalDNS)
+
+ingress:
+  enabled: false                       # true = static IPs + public load balancers (~$18/month each)
+  ips:
+    # optin-backend:                   # creates static IP "optin-backend-ingress-ip"
+
+dns:
+  domain: ""                           # e.g. dev.your-domain.com; needs nat.enabled and the
+                                       # external-dns service account (service_accounts.yaml)
+  external_dns_chart_version: 1.23.0

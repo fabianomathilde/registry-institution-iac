@@ -1,0 +1,12 @@
+# Project: who and where. The state bucket is derived as "<project_id>-tfstate".
+
+project_id: registry-institution-dev   # verify the project ID: gcloud projects list
+environment: dev
+region: us-central1
+
+github:
+  owner: fabianomathilde               # GitHub user or organization that owns all repos
+  iac_repo: registry-institution-iac   # this repo
+
+# false in dev: terraform destroy can delete clusters, databases and data.
+deletion_protection: false

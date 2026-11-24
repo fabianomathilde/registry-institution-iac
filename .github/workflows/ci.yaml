@@ -1,0 +1,78 @@
+# IaC CI (gitflow): checks every change; never applies.
+#
+#   any push / PR      -> terraform fmt + validate (no cloud credentials)
+#   PR into develop    -> plan dev   (GitHub Environment "dev")
+#   PR into main       -> plan prod  (GitHub Environment "prod-plan": same variables as "prod",
+#                                     without reviewers, so the plan runs without approval)
+#
+# The plan is printed in the job summary of the PR checks.
+
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_VERSION: "1.17.2"
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: fmt
+        run: terraform fmt -check -recursive
+      - name: validate
+        run: |
+          for stack in stacks/*/; do
+            echo "::group::$stack"
+            terraform -chdir="$stack" init -backend=false -input=false
+            terraform -chdir="$stack" validate
+            echo "::endgroup::"
+          done
+      # Block-style YAML only (no {...} / [...]): see .yamllint.yaml.
+      - name: yamllint
+        run: |
+          command -v yamllint >/dev/null || pipx install yamllint
+          yamllint -s envs/
+
+  plan:
+    if: github.event_name == 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: ${{ github.base_ref == 'main' && 'prod-plan' || 'dev' }}
+    concurrency: terraform-plan-${{ github.base_ref }}
+    env:
+      TARGET_ENV: ${{ github.base_ref == 'main' && 'prod' || 'dev' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.TERRAFORM_SA }}
+      - name: plan
+        run: |
+          for stack in foundation components identities platform; do
+            ./scripts/tf.sh "$TARGET_ENV" "$stack" plan -no-color -lock=false
+            {
+              echo "### ${TARGET_ENV} / ${stack}"
+              echo '```'
+              (cd "stacks/${stack}" && terraform show -no-color tfplan | tail -c 30000)
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done

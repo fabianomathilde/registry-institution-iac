@@ -1,0 +1,9 @@
+# Registries: Artifact Registry Docker repositories.
+# Access for service accounts of this project is granted in service_accounts.yaml with
+# "registry/<name>". external_readers are members from other projects (e.g. the prod deployer
+# that promotes dev images); add them only after they exist.
+
+optin-backend:
+  immutable_tags: true                 # a tag (commit SHA) always points to the same image
+  keep_count: 20                       # most recent versions always kept; older than 30 days deleted
+  external_readers:

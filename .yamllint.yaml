@@ -1,0 +1,16 @@
+# Settings files (envs/<env>/*.yaml) are read by people first: block style only.
+extends: default
+
+rules:
+  braces:
+    forbid: true          # no { key: value } flow mappings
+  brackets:
+    forbid: true          # no [a, b] flow sequences: one "- item" per line
+  document-start: disable
+  line-length:
+    max: 120
+  truthy:
+    allowed-values: ["true", "false"]
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
